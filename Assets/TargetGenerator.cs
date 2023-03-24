@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.IO;
 
 public class TargetGenerator : MonoBehaviour
 {
@@ -10,17 +11,49 @@ public class TargetGenerator : MonoBehaviour
     public float size = 3.0f;
     public float distance = 100.0f;
     public GameObject target;
+    public GameObject calibTarget;
     public GameObject leftTrackedEye;
     public GameObject rightTrackedEye;
+    public bool depthTest = false;
+    public float calibTargetNearDist = 0.25f;
+    public float calibTargetFarDist = 10.0f;
 
     private List<Collider> targetColliders = new List<Collider>();
+    private GameObject calibTargetInstance;
+    private float calibStartTime;
+    private bool calibRunning = false;
+
+    private StreamWriter writer;
+
+    private string path;
 
     // Start is called before the first frame update
     void Start()
     {
+        path = Application.persistentDataPath + "/test.csv";
+
         float width = columns * size + (columns - 1) * padding;
         float height = rows * size + (rows - 1) * padding;
-        
+
+        if (depthTest)
+        {
+            float theta = 0;
+            float phi = 0;
+            float x = Mathf.Sin(theta / 180 * Mathf.PI);
+            float y = Mathf.Sin(phi / 180 * Mathf.PI);
+            float z = Mathf.Sqrt(1 - (x * x + y * y));
+
+            var position = new Vector3(x, y, z) * calibTargetFarDist;
+            var rotation = new Vector3(x, y, z);
+            calibTargetInstance = Instantiate(calibTarget, this.transform);
+            var targetScale = 2 * Mathf.Atan((size / 2) / 180 * Mathf.PI) * calibTargetFarDist;
+
+            calibTargetInstance.transform.localPosition = position;
+            calibTargetInstance.transform.localRotation = Quaternion.LookRotation(rotation);
+            calibTargetInstance.transform.localScale = new Vector3(targetScale, targetScale, 1);
+            calibTargetInstance.SetActive(false);
+        }
+
         for (int row = 0; row < rows; row++)
         {
             for (int col = 0; col < columns; col++)
@@ -32,7 +65,6 @@ public class TargetGenerator : MonoBehaviour
                 float z = Mathf.Sqrt(1 - (x * x + y * y));
                 var position = new Vector3(x, y, z) * distance;
                 var rotation = new Vector3(x, y, z);
-                Debug.Log(rotation);
                 var targetScale = 2 * Mathf.Atan((size / 2) / 180 * Mathf.PI) * distance;
                 var blob = Instantiate(target, this.transform);
                 blob.transform.localPosition = position;
@@ -51,9 +83,61 @@ public class TargetGenerator : MonoBehaviour
         RaycastHit info;
         if (Physics.Raycast(leftTrackedEye.transform.position, leftTrackedEye.transform.forward, out info))
         {
-            info.collider.gameObject.GetComponent<Renderer>().material.color = Color.blue;
+            //info.collider.gameObject.GetComponent<Renderer>().material.color = Color.blue;
         }
 
 
+        if (depthTest)
+        {
+            if (OVRInput.GetDown(OVRInput.Button.Two))
+
+            {
+                if (!calibRunning)
+                {
+                    calibRunning = true;
+                    if (File.Exists(path)) File.Delete(path);
+                    writer = new StreamWriter(path);
+                    calibStartTime = Time.time;
+                    calibTargetInstance.SetActive(true);
+                }
+                else
+                {
+                    calibRunning = false;
+                    writer.Close();
+                    calibTargetInstance.SetActive(false);
+                }
+            }
+
+            if (calibRunning)
+            {
+                var delta = Time.time - calibStartTime;
+                var percent = (Mathf.Cos(delta / 2) + 1) / 2;
+                var nearDistDiopter = 1 / calibTargetNearDist;
+                var farDistDiotper = 1 / calibTargetFarDist;
+                var distanceDiopter = nearDistDiopter + percent * (farDistDiotper - nearDistDiopter);
+                var distance = 1 / distanceDiopter;
+
+                float theta = 0;
+                float phi = 0;
+                float x = Mathf.Sin(theta / 180 * Mathf.PI);
+                float y = Mathf.Sin(phi / 180 * Mathf.PI);
+                float z = Mathf.Sqrt(1 - (x * x + y * y));
+                var position = new Vector3(x, y, z) * distance;
+                var rotation = new Vector3(x, y, z);
+                var targetScale = 2 * Mathf.Atan((size / 2) / 180 * Mathf.PI) * distance;
+
+                calibTargetInstance.transform.localPosition = position;
+                calibTargetInstance.transform.localRotation = Quaternion.LookRotation(rotation);
+                calibTargetInstance.transform.localScale = new Vector3(targetScale, targetScale, 1);
+
+                var ipd = (rightTrackedEye.transform.position - leftTrackedEye.transform.position).magnitude;
+                var leftVector = leftTrackedEye.transform.localRotation * Vector3.forward;
+                var rightVector = rightTrackedEye.transform.localRotation * Vector3.forward;
+                var convergenceDistance = ipd / (leftVector.x / leftVector.z - rightVector.x / rightVector.z);
+                var convergence = leftVector / leftVector.z * convergenceDistance;
+
+                writer.WriteLine(position.x + "," + position.y + "," + position.z + "," + convergence.x + "," + convergence.y + "," + convergence.z);
+            }
+        }
     }
 }
