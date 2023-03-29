@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
+using System;
 
 public class TargetGenerator : MonoBehaviour
 {
@@ -22,15 +23,18 @@ public class TargetGenerator : MonoBehaviour
     private GameObject calibTargetInstance;
     private float calibStartTime;
     private bool calibRunning = false;
+    private Vector2 calibPhiTheta;
 
     private StreamWriter writer;
 
     private string path;
 
+    private System.Random rnd = new System.Random();
+
     // Start is called before the first frame update
     void Start()
     {
-        path = Application.persistentDataPath + "/test.csv";
+        path = Application.persistentDataPath;
 
         float width = columns * size + (columns - 1) * padding;
         float height = rows * size + (rows - 1) * padding;
@@ -95,10 +99,12 @@ public class TargetGenerator : MonoBehaviour
                 if (!calibRunning)
                 {
                     calibRunning = true;
-                    if (File.Exists(path)) File.Delete(path);
-                    writer = new StreamWriter(path);
+                    var datestring = DateTime.Now.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss");
+                    writer = new StreamWriter(path + "/" + datestring);
                     calibStartTime = Time.time;
                     calibTargetInstance.SetActive(true);
+                    
+                    calibPhiTheta = new Vector2((float) rnd.NextDouble() * 60 - 30, (float)rnd.NextDouble() * 60 - 30);
                 }
                 else
                 {
@@ -117,8 +123,8 @@ public class TargetGenerator : MonoBehaviour
                 var distanceDiopter = nearDistDiopter + percent * (farDistDiotper - nearDistDiopter);
                 var distance = 1 / distanceDiopter;
 
-                float theta = 0;
-                float phi = 0;
+                float theta = calibPhiTheta.x;
+                float phi = calibPhiTheta.y;
                 float x = Mathf.Sin(theta / 180 * Mathf.PI);
                 float y = Mathf.Sin(phi / 180 * Mathf.PI);
                 float z = Mathf.Sqrt(1 - (x * x + y * y));
