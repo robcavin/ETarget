@@ -10,7 +10,7 @@ public class DebugUI : MonoBehaviour
     public GameObject leftEye;
     public GameObject rightEye;
     public GameObject canvas;
-
+    
     bool inMenu;
 
     private Text convergenceText;
@@ -89,7 +89,7 @@ public class DebugUI : MonoBehaviour
         var ipd = (rightEye.transform.position - leftEye.transform.position).magnitude;
         var leftVector = leftEye.transform.localRotation * Vector3.forward;
         var rightVector = rightEye.transform.localRotation * Vector3.forward;
-        var convergenceDistance = ipd / (leftVector.x / leftVector.z - rightVector.x / rightVector.z);
+        var convergenceDistance = ipd / ((leftVector.x / leftVector.z - rightVector.x / rightVector.z) + 1e-9f);
         var convergence = leftVector / leftVector.z * convergenceDistance;
 
         IPDText.text = ipd.ToString();
